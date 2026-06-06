@@ -119,4 +119,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import traceback
+    _log = Path.home() / "Desktop" / "火花2.0_启动日志.txt"
+    try:
+        main()
+    except Exception:
+        _log.write_text(traceback.format_exc(), encoding="utf-8")
+        raise
