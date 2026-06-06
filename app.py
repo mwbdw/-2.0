@@ -27,16 +27,21 @@ def _ensure_chromium():
 
     def _download():
         print("【首次运行】正在后台下载 Chromium 浏览器（约 130MB），请稍候，下载完成后即可使用登录功能…", flush=True)
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            node = Path(meipass) / "playwright" / "driver" / "node"
-            cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
-            if node.exists() and cli.exists():
-                subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
-                print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
-                return
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
-        print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
+        try:
+            # 用 playwright 自己的 API 找到正确的 driver 路径
+            from playwright._impl._driver import compute_driver_executable
+            driver = compute_driver_executable()
+            subprocess.run([str(driver), "install", "chromium"],
+                           env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(_browsers_cache)},
+                           check=False)
+        except Exception:
+            subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
+                           env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(_browsers_cache)},
+                           check=False)
+        if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
+            print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
+        else:
+            print("【错误】Chromium 下载失败，请检查网络后重启应用。", flush=True)
 
     threading.Thread(target=_download, daemon=True).start()
 
