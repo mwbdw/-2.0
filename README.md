@@ -53,7 +53,7 @@ python3 app.py
 | 项目 | 要求 |
 |------|------|
 | 系统 | macOS 12 Monterey 或更高 |
-| 芯片 | Apple Silicon（M1/M2/M3） |
+| 芯片 | Apple Silicon（M1/M2/M3/M4/M5） |
 | 网络 | 首次运行需联网下载 Chromium |
 
 ## 使用说明
