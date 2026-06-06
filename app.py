@@ -19,15 +19,6 @@ os.environ["HUAHUO_LAUNCHER"] = "1"
 _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
-def _find_system_chrome():
-    candidates = [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-    ]
-    return next((p for p in candidates if Path(p).exists()), None)
-
-
 def _ensure_chromium(log=None):
     """后台下载 Chromium（约 130MB），逐行输出进度"""
     import subprocess
@@ -35,11 +26,6 @@ def _ensure_chromium(log=None):
     def emit(msg):
         if log: log(msg)
         else: print(msg, flush=True)
-
-    # 系统 Chrome 可用则跳过下载
-    if _find_system_chrome():
-        emit("[✓] 检测到系统 Chrome，可以直接登录")
-        return
 
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
         emit("[✓] 浏览器已就绪，可以登录")
