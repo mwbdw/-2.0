@@ -23,6 +23,7 @@ def _ensure_chromium(log=None):
     """后台下载 Chromium（约 130MB），不阻塞主线程"""
     import subprocess
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
+        if log: log("[✓] 浏览器已就绪，可以登录")
         return
     msg = "[~] 首次运行：正在后台下载 Chromium 浏览器（约 130MB），下载完成前请勿点击登录…"
     if log: log(msg)
@@ -101,9 +102,15 @@ def main():
         print("服务器启动失败", file=sys.stderr)
         sys.exit(1)
 
-    # 服务器就绪后，后台下载 Chromium（日志写入 SSE 队列）
+    # 服务器就绪后，推启动消息 + 后台检查/下载 Chromium
     import server as _srv
-    threading.Thread(target=_ensure_chromium, args=(_srv._push_log,), daemon=True).start()
+
+    def _init_log():
+        time.sleep(1)  # 等前端 SSE 连接建立
+        _srv._push_log("[✓] 应用已启动，准备就绪")
+        _ensure_chromium(_srv._push_log)
+
+    threading.Thread(target=_init_log, daemon=True).start()
 
     # 创建原生窗口
     window = webview.create_window(
