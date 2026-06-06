@@ -20,24 +20,25 @@ _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
 def _ensure_chromium():
-    """首次运行时自动下载 Chromium（约 130MB）"""
+    """后台下载 Chromium，不阻塞窗口启动"""
     import subprocess
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
         return
-    print("首次运行：正在下载 Chromium 浏览器，请稍候（约 130MB）…", flush=True)
 
-    # PyInstaller 冻结环境：用打包在 app 里的 node + playwright CLI
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        node = Path(meipass) / "playwright" / "driver" / "node"
-        cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
-        if node.exists() and cli.exists():
-            subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
-            return
-    # 源码直接运行
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+    def _download():
+        print("【首次运行】正在后台下载 Chromium 浏览器（约 130MB），请稍候，下载完成后即可使用登录功能…", flush=True)
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            node = Path(meipass) / "playwright" / "driver" / "node"
+            cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
+            if node.exists() and cli.exists():
+                subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
+                print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
+                return
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+        print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
 
-_ensure_chromium()
+    threading.Thread(target=_download, daemon=True).start()
 
 PORT = 8765
 
@@ -96,6 +97,9 @@ def main():
     if not _wait_for_server():
         print("服务器启动失败", file=sys.stderr)
         sys.exit(1)
+
+    # 后台下载 Chromium（首次运行，不阻塞窗口）
+    _ensure_chromium()
 
     # 创建原生窗口
     window = webview.create_window(
