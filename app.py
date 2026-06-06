@@ -31,6 +31,12 @@ def _ensure_chromium(log=None):
         emit("[✓] 浏览器已就绪，可以登录")
         return
 
+    # 清理残留锁文件
+    lockfile = _browsers_cache / "__dirlock"
+    if lockfile.exists():
+        try: lockfile.unlink()
+        except Exception: pass
+
     emit("[~] 首次运行：正在下载 Chromium 浏览器（约 130MB），完成前请勿点击登录…")
 
     meipass = getattr(sys, "_MEIPASS", None)

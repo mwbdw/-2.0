@@ -36,6 +36,13 @@ fi
 echo "✓ 找到 app：$APP"
 echo ""
 
+# 清理残留锁文件（上次安装中断时会留下）
+LOCKFILE="$PLAYWRIGHT_BROWSERS_PATH/__dirlock"
+if [ -f "$LOCKFILE" ] || [ -d "$LOCKFILE" ]; then
+  echo "► 检测到残留锁文件，正在清理..."
+  rm -rf "$LOCKFILE"
+fi
+
 # 检查是否已安装
 export PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright"
 if ls "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-mac-arm64/"Google Chrome for Testing.app" &>/dev/null 2>&1; then
