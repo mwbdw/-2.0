@@ -49,17 +49,8 @@ echo "► 开始下载 Chromium（约 130MB）..."
 echo "  下载过程中请保持网络畅通，不要关闭此窗口。"
 echo ""
 
-# 运行并实时显示进度
-"$NODE" "$CLI" install chromium 2>&1 | while IFS= read -r line; do
-  # 过滤空行
-  [ -z "$line" ] && continue
-  # 下载进度行（含 Mb 或 %）直接显示
-  if echo "$line" | grep -qE "Mb|%|Downloading|downloaded to"; then
-    echo "  $line"
-  else
-    echo "  $line"
-  fi
-done
+# 直接运行，让终端原生渲染进度条
+"$NODE" "$CLI" install chromium
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

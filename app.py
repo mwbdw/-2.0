@@ -45,10 +45,22 @@ def _ensure_chromium(log=None):
         emit("[✗] 找不到 Playwright 驱动，请重新下载 app")
         return
 
-    # 逐行流式输出进度
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    for line in proc.stdout:
-        line = line.rstrip()
+    # 按字节读取，\r 和 \n 都作为行分隔符（兼容进度条）
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    buf = b""
+    while True:
+        ch = proc.stdout.read(1)
+        if not ch:
+            break
+        if ch in (b"\n", b"\r"):
+            line = buf.decode("utf-8", errors="replace").strip()
+            if line:
+                emit(f"[~] {line}")
+            buf = b""
+        else:
+            buf += ch
+    if buf:
+        line = buf.decode("utf-8", errors="replace").strip()
         if line:
             emit(f"[~] {line}")
     proc.wait()
