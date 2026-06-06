@@ -158,7 +158,31 @@ def main():
         resizable=True,
         min_size=(720, 560),
     )
-    webview.start()
+
+    # 点叉叉只隐藏窗口，不退出 app（Cmd+Q 才是真正退出）
+    def on_closing():
+        window.hide()
+        return False
+
+    window.events.closing += on_closing
+
+    # 点 Dock 图标时重新显示窗口
+    def _setup_dock(window):
+        try:
+            import AppKit, objc
+
+            class _Delegate(AppKit.NSObject):
+                def applicationShouldHandleReopen_hasVisibleWindows_(self, app, has_visible):
+                    if not has_visible:
+                        window.show()
+                    return True
+
+            _d = _Delegate.alloc().init()
+            AppKit.NSApp.setDelegate_(_d)
+        except Exception:
+            pass
+
+    webview.start(func=_setup_dock, args=[window])
 
 
 if __name__ == "__main__":
