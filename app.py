@@ -19,12 +19,14 @@ os.environ["HUAHUO_LAUNCHER"] = "1"
 _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
-def _ensure_chromium():
+def _ensure_chromium(log=None):
     """后台下载 Chromium（约 130MB），不阻塞主线程"""
     import subprocess
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
         return
-    print("[~] 首次运行：后台下载 Chromium 浏览器（约 130MB），完成前请勿点击登录…", flush=True)
+    msg = "[~] 首次运行：正在后台下载 Chromium 浏览器（约 130MB），下载完成前请勿点击登录…"
+    if log: log(msg)
+    else: print(msg, flush=True)
 
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
@@ -32,13 +34,14 @@ def _ensure_chromium():
         cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
         if node.exists() and cli.exists():
             subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
-            print("[✓] Chromium 下载完成，现在可以登录了", flush=True)
+            done = "[✓] Chromium 下载完成，现在可以点击登录了"
+            if log: log(done)
+            else: print(done, flush=True)
             return
     subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
-    print("[✓] Chromium 下载完成，现在可以登录了", flush=True)
-
-# 后台线程下载，不阻塞窗口启动
-threading.Thread(target=_ensure_chromium, daemon=True).start()
+    done = "[✓] Chromium 下载完成，现在可以点击登录了"
+    if log: log(done)
+    else: print(done, flush=True)
 
 PORT = 8765
 
@@ -97,6 +100,10 @@ def main():
     if not _wait_for_server():
         print("服务器启动失败", file=sys.stderr)
         sys.exit(1)
+
+    # 服务器就绪后，后台下载 Chromium（日志写入 SSE 队列）
+    import server as _srv
+    threading.Thread(target=_ensure_chromium, args=(_srv._push_log,), daemon=True).start()
 
     # 创建原生窗口
     window = webview.create_window(
