@@ -25,10 +25,8 @@ async function loadConfig() {
   friends = cfg.friends || [];
   messages = cfg.messages || [];
   const t = cfg.send_time || '08:00';
-  const el1 = document.getElementById('send-time');
-  const el2 = document.getElementById('sched-time');
-  if (el1) el1.value = t;
-  if (el2) el2.value = t;
+  const el = document.getElementById('sched-time');
+  if (el) el.value = t;
   document.getElementById('headless').checked = !!cfg.headless;
   renderTags('friends-tags', friends, removeFriend);
   renderTags('messages-tags', messages, removeMessage);
@@ -38,7 +36,7 @@ async function saveConfig() {
   const cfg = {
     friends,
     messages,
-    send_time: document.getElementById('send-time').value,
+    send_time: document.getElementById('sched-time').value,
     headless: document.getElementById('headless').checked,
   };
   await api('PUT', '/api/config', cfg);
@@ -92,7 +90,7 @@ function renderTags(containerId, items, onRemove) {
 }
 
 function _schedTimeEl() {
-  return document.getElementById('sched-time') || document.getElementById('send-time');
+  return document.getElementById('sched-time');
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -150,8 +148,6 @@ async function applyScheduleTime() {
     const send_time = el ? el.value : '';
     if (!send_time) { toast('请先选择时间', true); return; }
     await api('POST', '/api/schedule', { action: 'update_time', send_time });
-    // 同步到配置区
-    document.getElementById('send-time').value = send_time;
     toast(`定时时间已更新为 ${send_time}`);
     fetchStatus();
   } catch (e) {
@@ -209,8 +205,19 @@ function appendLog(msg) {
   if (msg.includes('[✓]') || msg.includes('成功')) cls = 'ok';
   else if (msg.includes('[✗]') || msg.includes('失败') || msg.includes('错误')) cls = 'err';
   else if (msg.includes('[~]') || msg.includes('[!]')) cls = 'dim';
-  if (cls) line.className = cls;
-  line.textContent = msg;
+  line.className = 'log-line' + (cls ? ' ' + cls : '');
+
+  const ts = document.createElement('span');
+  ts.className = 'log-ts';
+  const now = new Date();
+  ts.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+  const text = document.createElement('span');
+  text.className = 'log-msg';
+  text.textContent = msg;
+
+  line.appendChild(ts);
+  line.appendChild(text);
   box.appendChild(line);
   box.scrollTop = box.scrollHeight;
 }
@@ -239,7 +246,7 @@ let _toastTimer = null;
 function toast(msg, isError = false) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.style.borderColor = isError ? '#c00' : '';
+  el.classList.toggle('error', isError);
   el.classList.add('show');
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
