@@ -75,7 +75,7 @@ def main():
 
     # 创建原生窗口
     window = webview.create_window(
-        title="🔥 抖音续火花 2.0",
+        title="🔥 抖音续火花",
         url=f"http://127.0.0.1:{PORT}",
         width=960,
         height=720,
