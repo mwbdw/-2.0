@@ -36,6 +36,20 @@ Object.defineProperty(navigator, 'plugins', {get: () => [
 Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en']});
 """
 
+def _find_chrome() -> str | None:
+    """查找系统已安装的 Chrome，找不到返回 None（用 playwright 内置 Chromium）"""
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+    ]
+    for p in candidates:
+        if Path(p).exists():
+            return p
+    return None
+
+_SYSTEM_CHROME = _find_chrome()
+
 _BROWSER_ARGS = [
     "--disable-blink-features=AutomationControlled",
     "--disable-infobars",
@@ -481,7 +495,11 @@ def do_login(cookies_path: Path):
 
 def _do_login_inner(cookies_path: Path):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, args=_BROWSER_ARGS)
+        launch_opts = dict(headless=False, args=_BROWSER_ARGS)
+        if _SYSTEM_CHROME:
+            launch_opts["executable_path"] = _SYSTEM_CHROME
+            _log(f"[~] 使用系统 Chrome：{_SYSTEM_CHROME}")
+        browser = p.chromium.launch(**launch_opts)
         context = browser.new_context(**_CONTEXT_OPTS)
         page = context.new_page()
         page.add_init_script(_STEALTH_SCRIPT)
@@ -505,7 +523,10 @@ def run_task(config: dict, cookies_path: Path):
     _log(f"\n[→] 开始续火花任务，共 {len(friends)} 位好友")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, args=_BROWSER_ARGS)
+        launch_opts = dict(headless=headless, args=_BROWSER_ARGS)
+        if _SYSTEM_CHROME:
+            launch_opts["executable_path"] = _SYSTEM_CHROME
+        browser = p.chromium.launch(**launch_opts)
         context = browser.new_context(**_CONTEXT_OPTS)
         page = context.new_page()
         page.add_init_script(_STEALTH_SCRIPT)
