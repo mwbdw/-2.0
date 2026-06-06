@@ -15,6 +15,11 @@ os.chdir(Path(__file__).parent)
 # 告诉 server.py 不要自动打开浏览器
 os.environ["HUAHUO_LAUNCHER"] = "1"
 
+# 数据目录固定在 Application Support，跨版本更新不丢配置
+_data_dir = Path.home() / "Library" / "Application Support" / "火花2.0"
+_data_dir.mkdir(parents=True, exist_ok=True)
+os.environ["HUAHUO_DATA_DIR"] = str(_data_dir)
+
 # Playwright 浏览器路径：优先用用户缓存，打包环境下自动下载
 _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
