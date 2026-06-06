@@ -15,6 +15,26 @@ os.chdir(Path(__file__).parent)
 # 告诉 server.py 不要自动打开浏览器
 os.environ["HUAHUO_LAUNCHER"] = "1"
 
+# Playwright 浏览器路径：优先用用户缓存，打包环境下自动下载
+_browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
+
+def _ensure_chromium():
+    """首次运行时自动下载 Chromium（约 130MB）"""
+    import subprocess, sys
+    if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
+        return
+    print("首次运行：正在下载 Chromium 浏览器，请稍候（约 130MB）…", flush=True)
+    # 使用打包进来的 playwright CLI 下载
+    playwright_cli = Path(sys.executable).parent / "playwright"
+    if not playwright_cli.exists():
+        # PyInstaller 冻结环境：用 python -m playwright
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+    else:
+        subprocess.run([str(playwright_cli), "install", "chromium"], check=False)
+
+_ensure_chromium()
+
 PORT = 8765
 
 
