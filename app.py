@@ -20,30 +20,25 @@ _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
 def _ensure_chromium():
-    """后台下载 Chromium，不阻塞窗口启动"""
+    """后台下载 Chromium（约 130MB），不阻塞主线程"""
     import subprocess
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
         return
+    print("[~] 首次运行：后台下载 Chromium 浏览器（约 130MB），完成前请勿点击登录…", flush=True)
 
-    def _download():
-        print("【首次运行】正在后台下载 Chromium 浏览器（约 130MB），请稍候，下载完成后即可使用登录功能…", flush=True)
-        try:
-            # 用 playwright 自己的 API 找到正确的 driver 路径
-            from playwright._impl._driver import compute_driver_executable
-            driver = compute_driver_executable()
-            subprocess.run([str(driver), "install", "chromium"],
-                           env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(_browsers_cache)},
-                           check=False)
-        except Exception:
-            subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
-                           env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(_browsers_cache)},
-                           check=False)
-        if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
-            print("【完成】Chromium 下载完毕，现在可以点击登录了。", flush=True)
-        else:
-            print("【错误】Chromium 下载失败，请检查网络后重启应用。", flush=True)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        node = Path(meipass) / "playwright" / "driver" / "node"
+        cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
+        if node.exists() and cli.exists():
+            subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
+            print("[✓] Chromium 下载完成，现在可以登录了", flush=True)
+            return
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+    print("[✓] Chromium 下载完成，现在可以登录了", flush=True)
 
-    threading.Thread(target=_download, daemon=True).start()
+# 后台线程下载，不阻塞窗口启动
+threading.Thread(target=_ensure_chromium, daemon=True).start()
 
 PORT = 8765
 
@@ -103,9 +98,6 @@ def main():
         print("服务器启动失败", file=sys.stderr)
         sys.exit(1)
 
-    # 后台下载 Chromium（首次运行，不阻塞窗口）
-    _ensure_chromium()
-
     # 创建原生窗口
     window = webview.create_window(
         title="🔥 抖音续火花",
@@ -119,10 +111,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import traceback
-    _log = Path.home() / "Desktop" / "火花2.0_启动日志.txt"
-    try:
-        main()
-    except Exception:
-        _log.write_text(traceback.format_exc(), encoding="utf-8")
-        raise
+    main()
