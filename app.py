@@ -20,29 +20,43 @@ _browsers_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
 def _ensure_chromium(log=None):
-    """后台下载 Chromium（约 130MB），不阻塞主线程"""
+    """后台下载 Chromium（约 130MB），逐行输出进度"""
     import subprocess
+
+    def emit(msg):
+        if log: log(msg)
+        else: print(msg, flush=True)
+
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
-        if log: log("[✓] 浏览器已就绪，可以登录")
+        emit("[✓] 浏览器已就绪，可以登录")
         return
-    msg = "[~] 首次运行：正在后台下载 Chromium 浏览器（约 130MB），下载完成前请勿点击登录…"
-    if log: log(msg)
-    else: print(msg, flush=True)
+
+    emit("[~] 首次运行：正在下载 Chromium 浏览器（约 130MB），完成前请勿点击登录…")
 
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         node = Path(meipass) / "playwright" / "driver" / "node"
         cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
-        if node.exists() and cli.exists():
-            subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
-            done = "[✓] Chromium 下载完成，现在可以点击登录了"
-            if log: log(done)
-            else: print(done, flush=True)
-            return
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
-    done = "[✓] Chromium 下载完成，现在可以点击登录了"
-    if log: log(done)
-    else: print(done, flush=True)
+        cmd  = [str(node), str(cli), "install", "chromium"] if (node.exists() and cli.exists()) else None
+    else:
+        cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+
+    if not cmd:
+        emit("[✗] 找不到 Playwright 驱动，请重新下载 app")
+        return
+
+    # 逐行流式输出进度
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line:
+            emit(f"[~] {line}")
+    proc.wait()
+
+    if proc.returncode == 0:
+        emit("[✓] Chromium 下载完成，现在可以点击登录了")
+    else:
+        emit("[✗] Chromium 下载失败，请检查网络后重试")
 
 PORT = 8765
 
