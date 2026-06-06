@@ -21,17 +21,21 @@ os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_browsers_cache)
 
 def _ensure_chromium():
     """首次运行时自动下载 Chromium（约 130MB）"""
-    import subprocess, sys
+    import subprocess
     if list(_browsers_cache.glob("chromium-*/chrome-mac-arm64/Google Chrome for Testing.app")):
         return
     print("首次运行：正在下载 Chromium 浏览器，请稍候（约 130MB）…", flush=True)
-    # 使用打包进来的 playwright CLI 下载
-    playwright_cli = Path(sys.executable).parent / "playwright"
-    if not playwright_cli.exists():
-        # PyInstaller 冻结环境：用 python -m playwright
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
-    else:
-        subprocess.run([str(playwright_cli), "install", "chromium"], check=False)
+
+    # PyInstaller 冻结环境：用打包在 app 里的 node + playwright CLI
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        node = Path(meipass) / "playwright" / "driver" / "node"
+        cli  = Path(meipass) / "playwright" / "driver" / "package" / "cli.js"
+        if node.exists() and cli.exists():
+            subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
+            return
+    # 源码直接运行
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
 
 _ensure_chromium()
 
