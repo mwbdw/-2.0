@@ -221,6 +221,22 @@ def _screenshot(page, name: str):
         pass
 
 
+def _save_verify(friend_name: str, verified: bool):
+    try:
+        _DEBUG_DIR.mkdir(exist_ok=True)
+        result_file = _DEBUG_DIR / "send_results.json"
+        results = {}
+        if result_file.exists():
+            try:
+                results = json.loads(result_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        results[friend_name] = {"ok": verified, "time": time.time()}
+        result_file.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _goto_home(page, screenshot_name: str = "before_dismiss.png"):
     page.goto(DOUYIN_URL, timeout=30000, wait_until="domcontentloaded")
     page.wait_for_timeout(2000)
@@ -442,8 +458,25 @@ def _send_message(page, friend_name: str, message: str) -> bool:
         dm_page.wait_for_timeout(500)
         # 发送
         dm_page.keyboard.press("Enter")
-        dm_page.wait_for_timeout(1000)
+        dm_page.wait_for_timeout(1500)
         _screenshot(dm_page, f"after_send_{friend_name}.png")
+
+        # 检测页面 DOM 中是否出现「刚刚」时间标签（比 OCR 更可靠）
+        has_ganggang = False
+        try:
+            has_ganggang = dm_page.evaluate("""
+                () => {
+                    for (const el of document.querySelectorAll('*')) {
+                        if (el.childElementCount === 0 &&
+                            el.textContent.trim() === '刚刚') return true;
+                    }
+                    return false;
+                }
+            """)
+        except Exception:
+            pass
+        _save_verify(friend_name, bool(has_ganggang))
+        _log(f"  [{'✓' if has_ganggang else '~'}] 发送验证 {friend_name}: {'刚刚✓' if has_ganggang else '未检测到刚刚'}")
 
         _log(f"  [✓] 已发送给 {friend_name}: {message}")
         dm_page.close()

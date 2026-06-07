@@ -63,7 +63,11 @@
   <div class="card config-card">
     <div class="config-cols">
       <div class="config-col">
-        <div class="col-title">好友列表</div>
+        <div class="col-title">
+          好友列表
+          <span class="friend-count" id="friend-count"></span>
+          <button class="btn-select-toggle" id="btn-select-all" onclick="toggleSelectAll()">全选</button>
+        </div>
         <div class="field-row">
           <input type="text" id="friend-input" placeholder="输入好友昵称（完全匹配）"
                  onkeydown="if(event.key==='Enter')addFriend()" />
@@ -95,6 +99,20 @@
     </div>
   </div>
 
+  <!-- Check panel -->
+  <div class="check-panel card" id="screenshots-panel" style="display:none">
+    <div class="check-toolbar">
+      <span class="check-title">发送检查</span>
+      <button class="console-clear" onclick="fetchScreenshots()">刷新</button>
+    </div>
+    <div class="check-body">
+      <div class="check-list" id="check-list"></div>
+      <div class="check-preview" id="check-preview">
+        <span class="check-placeholder">← 点击左侧好友查看截图</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Logs: macOS Console style -->
   <div class="console-panel">
     <div class="console-toolbar">
@@ -107,6 +125,18 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="closeLightbox()">
+  <div class="lightbox-box" onclick="event.stopPropagation()">
+    <div class="lightbox-header">
+      <span id="lightbox-title"></span>
+      <button class="lightbox-close" onclick="closeLightbox()">×</button>
+    </div>
+    <img id="lightbox-img" src="" alt="" />
+  </div>
+</div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

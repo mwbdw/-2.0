@@ -1,12 +1,15 @@
 // ── State ────────────────────────────────────────────────────────────────────
 let friends = [];
 let messages = [];
+let selectedFriends = new Set();
 let sseSource = null;
+let _prevRunning = null;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadConfig();
   fetchStatus();
+  fetchScreenshots();
   connectLogs();
   let _pollTimer = setInterval(fetchStatus, 3000);
   document.addEventListener('visibilitychange', () => {
@@ -24,11 +27,12 @@ async function loadConfig() {
   const cfg = await api('GET', '/api/config');
   friends = cfg.friends || [];
   messages = cfg.messages || [];
+  selectedFriends = new Set(friends);
   const t = cfg.send_time || '08:00';
   const el = document.getElementById('sched-time');
   if (el) el.value = t;
   document.getElementById('headless').checked = !!cfg.headless;
-  renderTags('friends-tags', friends, removeFriend);
+  renderFriendTags();
   renderTags('messages-tags', messages, removeMessage);
 }
 
@@ -49,13 +53,60 @@ function addFriend() {
   const val = input.value.trim();
   if (!val || friends.includes(val)) { input.value = ''; return; }
   friends.push(val);
+  selectedFriends.add(val);
   input.value = '';
-  renderTags('friends-tags', friends, removeFriend);
+  renderFriendTags();
 }
 
 function removeFriend(name) {
   friends = friends.filter(f => f !== name);
-  renderTags('friends-tags', friends, removeFriend);
+  selectedFriends.delete(name);
+  renderFriendTags();
+}
+
+function toggleFriendSelection(name) {
+  if (selectedFriends.has(name)) {
+    selectedFriends.delete(name);
+  } else {
+    selectedFriends.add(name);
+  }
+  renderFriendTags();
+}
+
+function toggleSelectAll() {
+  if (selectedFriends.size === friends.length) {
+    selectedFriends.clear();
+  } else {
+    friends.forEach(f => selectedFriends.add(f));
+  }
+  renderFriendTags();
+}
+
+function renderFriendTags() {
+  const box = document.getElementById('friends-tags');
+  box.innerHTML = '';
+  friends.forEach(name => {
+    const isSelected = selectedFriends.has(name);
+    const tag = document.createElement('span');
+    tag.className = 'tag' + (isSelected ? '' : ' unselected');
+    tag.title = isSelected ? '点击取消选中（本次不发送）' : '点击选中（本次发送）';
+    tag.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('tag-del')) toggleFriendSelection(name);
+    });
+    const btn = document.createElement('button');
+    btn.className = 'tag-del';
+    btn.title = '从列表删除';
+    btn.textContent = '×';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); removeFriend(name); });
+    tag.appendChild(document.createTextNode(name));
+    tag.appendChild(btn);
+    box.appendChild(tag);
+  });
+  // 更新计数和全选按钮
+  const countEl = document.getElementById('friend-count');
+  const allBtn = document.getElementById('btn-select-all');
+  if (countEl) countEl.textContent = friends.length ? `${selectedFriends.size}/${friends.length}` : '';
+  if (allBtn) allBtn.textContent = selectedFriends.size === friends.length ? '全不选' : '全选';
 }
 
 function addMessage() {
@@ -110,6 +161,11 @@ async function fetchStatus() {
     document.getElementById('btn-login').disabled = s.running;
     document.getElementById('btn-sched-start').disabled = s.scheduled || s.running;
     document.getElementById('btn-sched-stop').disabled = !s.scheduled;
+
+    if (_prevRunning === true && !s.running) {
+      setTimeout(fetchScreenshots, 1500);
+    }
+    _prevRunning = s.running;
   } catch (_) {}
 }
 
@@ -122,8 +178,12 @@ function setStatValue(id, text, cls) {
 // ── Actions ───────────────────────────────────────────────────────────────────
 async function runNow() {
   try {
-    await api('POST', '/api/run');
-    toast('任务已启动');
+    const selected = [...selectedFriends];
+    if (selected.length === 0) { toast('请先选中至少一位好友', true); return; }
+    const payload = selected.length < friends.length ? { friends: selected } : null;
+    await api('POST', '/api/run', payload);
+    const msg = payload ? `任务已启动（${selected.length}/${friends.length} 位好友）` : '任务已启动';
+    toast(msg);
     fetchStatus();
   } catch (e) {
     toast(e.message, true);
@@ -181,6 +241,87 @@ async function resetState() {
   await api('POST', '/api/reset');
   toast('运行状态已重置 ✓');
   fetchStatus();
+}
+
+// ── Check panel ───────────────────────────────────────────────────────────────
+let _selectedFriend = null;
+
+async function fetchScreenshots() {
+  try {
+    const list = await api('GET', '/api/screenshots');
+    renderScreenshots(list);
+  } catch (_) {}
+}
+
+function renderScreenshots(list) {
+  const panel = document.getElementById('screenshots-panel');
+  const listEl = document.getElementById('check-list');
+  if (!list || list.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  listEl.innerHTML = '';
+  list.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'check-row' + (_selectedFriend === item.friend ? ' active' : '');
+    row.dataset.friend = item.friend;
+
+    const name = document.createElement('span');
+    name.className = 'check-name';
+    name.textContent = item.friend;
+
+    if (item.verified === true) {
+      const tick = document.createElement('span');
+      tick.className = 'check-tick';
+      tick.textContent = '✓';
+      tick.title = '已检测到「刚刚」，发送成功';
+      row.appendChild(name);
+      row.appendChild(tick);
+    } else {
+      row.appendChild(name);
+    }
+
+    const time = document.createElement('span');
+    time.className = 'check-time';
+    time.textContent = new Date(item.mtime * 1000).toLocaleTimeString('zh-CN', {
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    row.appendChild(time);
+    row.onclick = () => selectFriend(item.friend, item.mtime);
+    listEl.appendChild(row);
+  });
+
+  // Auto-select: restore previous selection or pick first
+  const target = list.find(x => x.friend === _selectedFriend) || list[0];
+  selectFriend(target.friend, target.mtime);
+}
+
+function selectFriend(friend, mtime) {
+  _selectedFriend = friend;
+  document.querySelectorAll('.check-row').forEach(r => {
+    r.classList.toggle('active', r.dataset.friend === friend);
+  });
+  const preview = document.getElementById('check-preview');
+  preview.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = `/api/screenshots/${encodeURIComponent(friend)}?t=${mtime}`;
+  img.alt = friend;
+  img.className = 'check-img';
+  img.onclick = () => openLightbox(img.src, friend);
+  preview.appendChild(img);
+}
+
+function openLightbox(src, title) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-title').textContent = title;
+  document.getElementById('lightbox').classList.add('show');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+  document.getElementById('lightbox-img').src = '';
 }
 
 // ── Logs via SSE ─────────────────────────────────────────────────────────────

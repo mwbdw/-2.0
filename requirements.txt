@@ -2,3 +2,6 @@ fastapi>=0.111
 uvicorn[standard]>=0.29
 playwright>=1.44
 schedule>=1.2
+pillow>=10.0
+pyobjc-framework-Vision
+pyobjc-framework-Quartz

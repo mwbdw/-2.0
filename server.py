@@ -11,7 +11,7 @@ from typing import Optional
 
 import schedule
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -91,10 +91,13 @@ def _run_locked(fn, task_name: str, update_last_run: bool = True):
         automation.set_log_callback(None)
 
 
-def _run_task_thread():
+def _run_task_thread(override_friends=None):
     def _work():
         _push_log("[→] 任务线程已启动")
-        automation.run_task(_read_config(), COOKIES_FILE)
+        cfg = _read_config()
+        if override_friends is not None:
+            cfg = {**cfg, "friends": override_friends}
+        automation.run_task(cfg, COOKIES_FILE)
         _push_log("[→] 任务线程已结束")
     _run_locked(_work, "任务线程")
 
@@ -160,10 +163,15 @@ async def get_status():
 
 
 @app.post("/api/run")
-async def post_run():
+async def post_run(request: Request):
     if _state["running"]:
         raise HTTPException(status_code=409, detail="任务正在运行中")
-    threading.Thread(target=_run_task_thread, daemon=True).start()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    override_friends = body.get("friends") if isinstance(body, dict) else None
+    threading.Thread(target=_run_task_thread, args=(override_friends,), daemon=True).start()
     return {"ok": True}
 
 
@@ -244,6 +252,42 @@ async def post_reset():
         pass  # 锁本来就是空闲的
     _push_log("[✓] 运行状态已强制重置")
     return {"ok": True}
+
+
+@app.get("/api/screenshots")
+async def list_screenshots():
+    debug_dir = _DATA / "debug"
+    # 读取发送验证结果
+    verify_map = {}
+    result_file = debug_dir / "send_results.json"
+    if result_file.exists():
+        try:
+            import json as _json
+            verify_map = _json.loads(result_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    results = []
+    if debug_dir.exists():
+        for f in debug_dir.glob("after_send_*.png"):
+            friend = f.stem[len("after_send_"):]
+            v = verify_map.get(friend, {})
+            results.append({
+                "friend": friend,
+                "mtime": f.stat().st_mtime,
+                "verified": v.get("ok") if isinstance(v, dict) else None,
+            })
+    results.sort(key=lambda x: x["mtime"], reverse=True)
+    return results
+
+
+@app.get("/api/screenshots/{friend}")
+async def get_screenshot(friend: str):
+    if any(c in friend for c in ('/', '\\', '..', '\0')):
+        raise HTTPException(status_code=400, detail="Invalid friend name")
+    path = _DATA / "debug" / f"after_send_{friend}.png"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/png")
 
 
 @app.delete("/api/cookies")
