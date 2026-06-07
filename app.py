@@ -159,30 +159,54 @@ def main():
         min_size=(720, 560),
     )
 
-    # 点叉叉只隐藏窗口，不退出 app（Cmd+Q 才是真正退出）
+    _proxy_holder = [None]  # [proxy, observer, ...]
+
     def on_closing():
-        window.hide()
+        import AppKit
+        if _proxy_holder[0] is not None and AppKit.NSApp.delegate() is not _proxy_holder[0]:
+            AppKit.NSApp.setDelegate_(_proxy_holder[0])
+        for w in AppKit.NSApp.windows():
+            w.orderOut_(None)
         return False
 
     window.events.closing += on_closing
 
-    # 点 Dock 图标时重新显示窗口
-    def _setup_dock(window):
-        try:
-            import AppKit, objc
+    def _install(_w):
+        import AppKit, objc, Foundation
+        orig = AppKit.NSApp.delegate()
 
-            class _Delegate(AppKit.NSObject):
-                def applicationShouldHandleReopen_hasVisibleWindows_(self, app, has_visible):
-                    if not has_visible:
-                        window.show()
-                    return True
+        class _Proxy(AppKit.NSObject):
+            @objc.typedSelector(b'B@:@B')
+            def applicationShouldHandleReopen_hasVisibleWindows_(self, _app, _has_visible):
+                AppKit.NSApp.activateIgnoringOtherApps_(True)
+                for w in AppKit.NSApp.windows():
+                    if w.isMiniaturized() or not w.isVisible():
+                        w.makeKeyAndOrderFront_(None)
+                return True
 
-            _d = _Delegate.alloc().init()
-            AppKit.NSApp.setDelegate_(_d)
-        except Exception:
-            pass
+            def forwardingTargetForSelector_(self, sel):
+                if orig and orig.respondsToSelector_(sel):
+                    return orig
+                return None
 
-    webview.start(func=_setup_dock, args=[window])
+        class _Observer(AppKit.NSObject):
+            # Fires after makeKeyAndOrderFront_; pywebview may have reset the delegate
+            # in its own windowDidBecomeKey: handler — reinstall ours here.
+            def windowBecameKey_(self, _notif):
+                if _proxy_holder[0] is not None and AppKit.NSApp.delegate() is not _proxy_holder[0]:
+                    AppKit.NSApp.setDelegate_(_proxy_holder[0])
+
+        _proxy_holder[0] = _Proxy.alloc().init()
+        AppKit.NSApp.setDelegate_(_proxy_holder[0])
+
+        obs = _Observer.alloc().init()
+        _proxy_holder.append(obs)
+        Foundation.NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
+            obs, b'windowBecameKey:',
+            AppKit.NSWindowDidBecomeKeyNotification, None
+        )
+
+    webview.start(func=_install, args=[window])
 
 
 if __name__ == "__main__":
